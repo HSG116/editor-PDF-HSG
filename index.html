@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محول الصور المتقدم</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        :root {
+            --primary-blue: #1a237e;
+            --dark-blue: #0d1440;
+            --accent-blue: #283593;
+            --black: #121212;
+            --white: #ffffff;
+            --gray: #f5f5f5;
+        }
+
+        body {
+            background-color: var(--black);
+            color: var(--white);
+            background-image: 
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 3px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 4px);
+            background-size: 550px 550px, 350px 350px, 250px 250px;
+            background-position: 0 0, 40px 60px, 130px 270px;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 0;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, var(--primary-blue), var(--dark-blue));
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="2" fill="white" opacity="0.1"/></svg>');
+            z-index: 0;
+        }
+
+        header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .upload-section, .preview-section {
+            background: rgba(26, 35, 126, 0.7);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--accent-blue);
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title i {
+            margin-left: 10px;
+            font-size: 1.8rem;
+        }
+
+        .drop-area {
+            border: 3px dashed var(--accent-blue);
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+            background: rgba(40, 53, 147, 0.2);
+        }
+
+        .drop-area:hover {
+            background: rgba(40, 53, 147, 0.4);
+            border-color: var(--white);
+        }
+
+        .drop-area i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            display: block;
+            color: var(--accent-blue);
+        }
+
+        .drop-area p {
+            font-size: 1.1rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(to right, var(--primary-blue), var(--accent-blue));
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 15px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .upload-btn:active {
+            transform: translateY(0);
+        }
+
+        .image-list {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .image-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .image-item img {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 5px;
+            margin-left: 10px;
+        }
+
+        .image-info {
+            flex: 1;
+        }
+
+        .image-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .image-size {
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+
+        .remove-btn {
+            background: none;
+            border: none;
+            color: #ff5252;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .preview-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #previewImage {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .no-preview {
+            padding: 40px;
+            text-align: center;
+            opacity: 0.7;
+        }
+
+        .edit-controls {
+            margin-top: 20px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .slider-container input {
+            flex: 1;
+            margin: 0 10px;
+        }
+
+        .slider-value {
+            width: 50px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: var(--accent-blue);
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--white);
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .format-options {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .format-btn {
+            padding: 12px 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid var(--accent-blue);
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .format-btn:hover {
+            background: var(--accent-blue);
+            transform: translateY(-3px);
+        }
+
+        .format-btn.active {
+            background: var(--accent-blue);
+            border-color: var(--white);
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .action-btn {
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .convert-btn {
+            background: linear-gradient(to right, #4caf50, #2e7d32);
+            color: white;
+        }
+
+        .download-btn {
+            background: linear-gradient(to right, #2196f3, #0d47a1);
+            color: white;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .action-btn:active {
+            transform: translateY(0);
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            background: rgba(26, 35, 126, 0.7);
+            border-radius: 10px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        /* تخصيص شريط التمرير */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent-blue);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-blue);
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>محول الصور المتقدم</h1>
+            <p>حوّل صورك إلى PDF, DOCX, PNG, JPG بجودة عالية مع إمكانيات تحرير متقدمة</p>
+        </header>
+
+        <div class="main-content">
+            <div class="upload-section">
+                <h2 class="section-title">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    رفع الصور
+                </h2>
+                
+                <div class="drop-area" id="dropArea">
+                    <i class="fas fa-images"></i>
+                    <p>اسحب وأفلت الصور هنا أو انقر للاختيار</p>
+                    <p class="small">يدعم: JPG, PNG, GIF, WEBP</p>
+                </div>
+                
+                <input type="file" id="fileInput" class="file-input" multiple accept="image/*">
+                
+                <button class="upload-btn" id="uploadBtn">
+                    <i class="fas fa-plus"></i> إضافة صور
+                </button>
+                
+                <div class="image-list" id="imageList">
+                    <!-- سيتم إضافة الصور المرفوعة هنا -->
+                </div>
+            </div>
+            
+            <div class="preview-section">
+                <h2 class="section-title">
+                    <i class="fas fa-eye"></i>
+                    المعاينة والتحرير
+                </h2>
+                
+                <div class="preview-container">
+                    <div class="no-preview" id="noPreview">
+                        <i class="fas fa-image" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                        <p>لم يتم اختيار صورة للمعاينة</p>
+                    </div>
+                    <img id="previewImage" style="display: none;">
+                </div>
+                
+                <div class="edit-controls">
+                    <div class="control-group">
+                        <label for="widthSlider">العرض (بكسل)</label>
+                        <div class="slider-container">
+                            <span class="slider-value" id="widthValue">800</span>
+                            <input type="range" id="widthSlider" min="100" max="2000" value="800">
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="heightSlider">الارتفاع (بكسل)</label>
+                        <div class="slider-container">
+                            <span class="slider-value" id="heightValue">600</span>
+                            <input type="range" id="heightSlider" min="100" max="2000" value="600">
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="qualitySlider">جودة الصورة (%)</label>
+                        <div class="slider-container">
+                            <span class="slider-value" id="qualityValue">90</span>
+                            <input type="range" id="qualitySlider" min="10" max="100" value="90">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="format-options">
+                    <button class="format-btn active" data-format="pdf">PDF</button>
+                    <button class="format-btn" data-format="docx">DOCX</button>
+                    <button class="format-btn" data-format="png">PNG</button>
+                    <button class="format-btn" data-format="jpg">JPG</button>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="action-btn convert-btn" id="convertBtn">
+                        <i class="fas fa-sync-alt"></i> تحويل
+                    </button>
+                    <button class="action-btn download-btn" id="downloadBtn" disabled>
+                        <i class="fas fa-download"></i> تحميل
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>جميع الحقوق محفوظة &copy; 2023 - محول الصور المتقدم</p>
+        </footer>
+    </div>
+
+    <script>
+        // العناصر الأساسية في الصفحة
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const imageList = document.getElementById('imageList');
+        const previewImage = document.getElementById('previewImage');
+        const noPreview = document.getElementById('noPreview');
+        const widthSlider = document.getElementById('widthSlider');
+        const heightSlider = document.getElementById('heightSlider');
+        const qualitySlider = document.getElementById('qualitySlider');
+        const widthValue = document.getElementById('widthValue');
+        const heightValue = document.getElementById('heightValue');
+        const qualityValue = document.getElementById('qualityValue');
+        const formatButtons = document.querySelectorAll('.format-btn');
+        const convertBtn = document.getElementById('convertBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // متغيرات التطبيق
+        let uploadedImages = [];
+        let selectedFormat = 'pdf';
+        let convertedFile = null;
+
+        // أحداث رفع الملفات
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        dropArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.style.borderColor = '#ffffff';
+            dropArea.style.backgroundColor = 'rgba(40, 53, 147, 0.4)';
+        });
+
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.style.borderColor = 'var(--accent-blue)';
+            dropArea.style.backgroundColor = 'rgba(40, 53, 147, 0.2)';
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.style.borderColor = 'var(--accent-blue)';
+            dropArea.style.backgroundColor = 'rgba(40, 53, 147, 0.2)';
+            
+            if (e.dataTransfer.files.length) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) {
+                handleFiles(fileInput.files);
+            }
+        });
+
+        // معالجة الملفات المرفوعة
+        function handleFiles(files) {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        const imageData = {
+                            name: file.name,
+                            size: formatFileSize(file.size),
+                            dataUrl: e.target.result
+                        };
+                        
+                        uploadedImages.push(imageData);
+                        updateImageList();
+                        
+                        // إذا كانت هذه هي الصورة الأولى، عرضها
+                        if (uploadedImages.length === 1) {
+                            showPreview(imageData.dataUrl);
+                        }
+                    };
+                    
+                    reader.readAsDataURL(file);
+                }
+            }
+        }
+
+        // تحديث قائمة الصور
+        function updateImageList() {
+            imageList.innerHTML = '';
+            
+            uploadedImages.forEach((image, index) => {
+                const imageItem = document.createElement('div');
+                imageItem.className = 'image-item';
+                
+                imageItem.innerHTML = `
+                    <img src="${image.dataUrl}" alt="${image.name}">
+                    <div class="image-info">
+                        <div class="image-name">${image.name}</div>
+                        <div class="image-size">${image.size}</div>
+                    </div>
+                    <button class="remove-btn" data-index="${index}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                
+                imageList.appendChild(imageItem);
+            });
+            
+            // إضافة أحداث لأزرار الحذف
+            document.querySelectorAll('.remove-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.currentTarget.getAttribute('data-index'));
+                    uploadedImages.splice(index, 1);
+                    updateImageList();
+                    
+                    if (uploadedImages.length === 0) {
+                        hidePreview();
+                    } else {
+                        showPreview(uploadedImages[0].dataUrl);
+                    }
+                });
+            });
+        }
+
+        // عرض المعاينة
+        function showPreview(dataUrl) {
+            noPreview.style.display = 'none';
+            previewImage.style.display = 'block';
+            previewImage.src = dataUrl;
+        }
+
+        // إخفاء المعاينة
+        function hidePreview() {
+            noPreview.style.display = 'block';
+            previewImage.style.display = 'none';
+            downloadBtn.disabled = true;
+        }
+
+        // تحديث قيم المنزلقات
+        widthSlider.addEventListener('input', () => {
+            widthValue.textContent = widthSlider.value;
+        });
+
+        heightSlider.addEventListener('input', () => {
+            heightValue.textContent = heightSlider.value;
+        });
+
+        qualitySlider.addEventListener('input', () => {
+            qualityValue.textContent = qualitySlider.value;
+        });
+
+        // اختيار صيغة الملف
+        formatButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                formatButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedFormat = btn.getAttribute('data-format');
+            });
+        });
+
+        // تحويل الملف
+        convertBtn.addEventListener('click', () => {
+            if (uploadedImages.length === 0) {
+                alert('يرجى رفع صورة واحدة على الأقل!');
+                return;
+            }
+            
+            // محاكاة عملية التحويل
+            convertBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحويل...';
+            convertBtn.disabled = true;
+            
+            setTimeout(() => {
+                // في التطبيق الحقيقي، هنا سيتم إجراء التحويل الفعلي
+                convertedFile = {
+                    name: `converted_file.${selectedFormat}`,
+                    format: selectedFormat
+                };
+                
+                convertBtn.innerHTML = '<i class="fas fa-sync-alt"></i> تحويل';
+                convertBtn.disabled = false;
+                downloadBtn.disabled = false;
+                
+                alert(`تم تحويل الصور بنجاح إلى ${selectedFormat.toUpperCase()}!`);
+            }, 2000);
+        });
+
+        // تحميل الملف
+        downloadBtn.addEventListener('click', () => {
+            if (convertedFile) {
+                // في التطبيق الحقيقي، هنا سيتم إنشاء رابط التحميل
+                alert(`سيبدأ تحميل ${convertedFile.name}`);
+                
+                // إعادة تعيين حالة التحميل
+                downloadBtn.disabled = true;
+                convertedFile = null;
+            }
+        });
+
+        // دالة مساعدة لتنسيق حجم الملف
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
