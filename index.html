@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>محول الصور المتقدم</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -19,6 +21,9 @@
             --black: #121212;
             --white: #ffffff;
             --gray: #f5f5f5;
+            --success: #4caf50;
+            --warning: #ff9800;
+            --error: #f44336;
         }
 
         body {
@@ -328,7 +333,7 @@
         }
 
         .convert-btn {
-            background: linear-gradient(to right, #4caf50, #2e7d32);
+            background: linear-gradient(to right, var(--success), #2e7d32);
             color: white;
         }
 
@@ -337,13 +342,19 @@
             color: white;
         }
 
-        .action-btn:hover {
+        .action-btn:hover:not(:disabled) {
             transform: translateY(-3px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
 
         .action-btn:active {
             transform: translateY(0);
+        }
+
+        .action-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
 
         footer {
@@ -354,6 +365,37 @@
             border-radius: 10px;
             font-size: 0.9rem;
             opacity: 0.8;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+
+        .notification.success {
+            background: var(--success);
+        }
+
+        .notification.error {
+            background: var(--error);
+        }
+
+        .notification.info {
+            background: var(--accent-blue);
         }
 
         /* تخصيص شريط التمرير */
@@ -419,7 +461,7 @@
                         <i class="fas fa-image" style="font-size: 3rem; margin-bottom: 15px;"></i>
                         <p>لم يتم اختيار صورة للمعاينة</p>
                     </div>
-                    <img id="previewImage" style="display: none;">
+                    <canvas id="previewCanvas" style="display: none; max-width: 100%; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);"></canvas>
                 </div>
                 
                 <div class="edit-controls">
@@ -477,7 +519,7 @@
         const fileInput = document.getElementById('fileInput');
         const uploadBtn = document.getElementById('uploadBtn');
         const imageList = document.getElementById('imageList');
-        const previewImage = document.getElementById('previewImage');
+        const previewCanvas = document.getElementById('previewCanvas');
         const noPreview = document.getElementById('noPreview');
         const widthSlider = document.getElementById('widthSlider');
         const heightSlider = document.getElementById('heightSlider');
@@ -492,7 +534,12 @@
         // متغيرات التطبيق
         let uploadedImages = [];
         let selectedFormat = 'pdf';
-        let convertedFile = null;
+        let convertedFiles = [];
+        let currentPreviewIndex = 0;
+        let ctx = previewCanvas.getContext('2d');
+
+        // تهيئة المكتبات
+        const { jsPDF } = window.jspdf;
 
         // أحداث رفع الملفات
         uploadBtn.addEventListener('click', () => {
@@ -541,7 +588,8 @@
                         const imageData = {
                             name: file.name,
                             size: formatFileSize(file.size),
-                            dataUrl: e.target.result
+                            dataUrl: e.target.result,
+                            file: file
                         };
                         
                         uploadedImages.push(imageData);
@@ -578,11 +626,20 @@
                 `;
                 
                 imageList.appendChild(imageItem);
+                
+                // إضافة حدث النقر لعرض الصورة في المعاينة
+                imageItem.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('remove-btn')) {
+                        currentPreviewIndex = index;
+                        showPreview(image.dataUrl);
+                    }
+                });
             });
             
             // إضافة أحداث لأزرار الحذف
             document.querySelectorAll('.remove-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     const index = parseInt(e.currentTarget.getAttribute('data-index'));
                     uploadedImages.splice(index, 1);
                     updateImageList();
@@ -590,7 +647,8 @@
                     if (uploadedImages.length === 0) {
                         hidePreview();
                     } else {
-                        showPreview(uploadedImages[0].dataUrl);
+                        currentPreviewIndex = Math.min(currentPreviewIndex, uploadedImages.length - 1);
+                        showPreview(uploadedImages[currentPreviewIndex].dataUrl);
                     }
                 });
             });
@@ -599,24 +657,62 @@
         // عرض المعاينة
         function showPreview(dataUrl) {
             noPreview.style.display = 'none';
-            previewImage.style.display = 'block';
-            previewImage.src = dataUrl;
+            previewCanvas.style.display = 'block';
+            
+            const img = new Image();
+            img.onload = function() {
+                // ضبط أبعاد الكانفاس بناءً على المنزلقات
+                const width = parseInt(widthSlider.value);
+                const height = parseInt(heightSlider.value);
+                
+                previewCanvas.width = width;
+                previewCanvas.height = height;
+                
+                // رسم الصورة مع الحفاظ على التناسب
+                const aspectRatio = img.width / img.height;
+                let drawWidth, drawHeight, offsetX, offsetY;
+                
+                if (width / height > aspectRatio) {
+                    drawHeight = height;
+                    drawWidth = height * aspectRatio;
+                    offsetX = (width - drawWidth) / 2;
+                    offsetY = 0;
+                } else {
+                    drawWidth = width;
+                    drawHeight = width / aspectRatio;
+                    offsetX = 0;
+                    offsetY = (height - drawHeight) / 2;
+                }
+                
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+            };
+            img.src = dataUrl;
         }
 
         // إخفاء المعاينة
         function hidePreview() {
             noPreview.style.display = 'block';
-            previewImage.style.display = 'none';
+            previewCanvas.style.display = 'none';
             downloadBtn.disabled = true;
+            convertedFiles = [];
         }
 
         // تحديث قيم المنزلقات
         widthSlider.addEventListener('input', () => {
             widthValue.textContent = widthSlider.value;
+            if (uploadedImages.length > 0) {
+                showPreview(uploadedImages[currentPreviewIndex].dataUrl);
+            }
         });
 
         heightSlider.addEventListener('input', () => {
             heightValue.textContent = heightSlider.value;
+            if (uploadedImages.length > 0) {
+                showPreview(uploadedImages[currentPreviewIndex].dataUrl);
+            }
         });
 
         qualitySlider.addEventListener('input', () => {
@@ -633,9 +729,9 @@
         });
 
         // تحويل الملف
-        convertBtn.addEventListener('click', () => {
+        convertBtn.addEventListener('click', async () => {
             if (uploadedImages.length === 0) {
-                alert('يرجى رفع صورة واحدة على الأقل!');
+                showNotification('يرجى رفع صورة واحدة على الأقل!', 'error');
                 return;
             }
             
@@ -643,31 +739,154 @@
             convertBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحويل...';
             convertBtn.disabled = true;
             
-            setTimeout(() => {
-                // في التطبيق الحقيقي، هنا سيتم إجراء التحويل الفعلي
-                convertedFile = {
-                    name: `converted_file.${selectedFormat}`,
-                    format: selectedFormat
-                };
+            try {
+                if (selectedFormat === 'pdf') {
+                    await convertToPDF();
+                } else if (selectedFormat === 'png' || selectedFormat === 'jpg') {
+                    await convertToImage();
+                } else {
+                    // DOCX غير مدعوم في هذا الإصدار
+                    showNotification('تحويل DOCX غير متاح في الإصدار الحالي', 'error');
+                    convertBtn.innerHTML = '<i class="fas fa-sync-alt"></i> تحويل';
+                    convertBtn.disabled = false;
+                    return;
+                }
                 
+                showNotification(`تم تحويل الصور بنجاح إلى ${selectedFormat.toUpperCase()}!`, 'success');
+                downloadBtn.disabled = false;
+            } catch (error) {
+                console.error('Error during conversion:', error);
+                showNotification('حدث خطأ أثناء التحويل!', 'error');
+            } finally {
                 convertBtn.innerHTML = '<i class="fas fa-sync-alt"></i> تحويل';
                 convertBtn.disabled = false;
-                downloadBtn.disabled = false;
-                
-                alert(`تم تحويل الصور بنجاح إلى ${selectedFormat.toUpperCase()}!`);
-            }, 2000);
+            }
         });
+
+        // تحويل إلى PDF
+        async function convertToPDF() {
+            const pdf = new jsPDF();
+            const width = pdf.internal.pageSize.getWidth();
+            const height = pdf.internal.pageSize.getHeight();
+            
+            for (let i = 0; i < uploadedImages.length; i++) {
+                if (i > 0) {
+                    pdf.addPage();
+                }
+                
+                const img = new Image();
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.src = uploadedImages[i].dataUrl;
+                });
+                
+                // حساب أبعاد الصورة لتناسب الصفحة
+                const imgWidth = img.width;
+                const imgHeight = img.height;
+                const ratio = Math.min(width / imgWidth, height / imgHeight);
+                const displayWidth = imgWidth * ratio;
+                const displayHeight = imgHeight * ratio;
+                const x = (width - displayWidth) / 2;
+                const y = (height - displayHeight) / 2;
+                
+                pdf.addImage(uploadedImages[i].dataUrl, 'JPEG', x, y, displayWidth, displayHeight);
+            }
+            
+            convertedFiles = [{
+                blob: pdf.output('blob'),
+                name: `converted_images.${selectedFormat}`
+            }];
+        }
+
+        // تحويل إلى صورة
+        async function convertToImage() {
+            convertedFiles = [];
+            
+            for (let i = 0; i < uploadedImages.length; i++) {
+                const img = new Image();
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.src = uploadedImages[i].dataUrl;
+                });
+                
+                // إنشاء كانفاس للصورة المعدلة
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // ضبط أبعاد الكانفاس بناءً على المنزلقات
+                const width = parseInt(widthSlider.value);
+                const height = parseInt(heightSlider.value);
+                const quality = parseInt(qualitySlider.value) / 100;
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // رسم الصورة مع الحفاظ على التناسب
+                const aspectRatio = img.width / img.height;
+                let drawWidth, drawHeight, offsetX, offsetY;
+                
+                if (width / height > aspectRatio) {
+                    drawHeight = height;
+                    drawWidth = height * aspectRatio;
+                    offsetX = (width - drawWidth) / 2;
+                    offsetY = 0;
+                } else {
+                    drawWidth = width;
+                    drawHeight = width / aspectRatio;
+                    offsetX = 0;
+                    offsetY = (height - drawHeight) / 2;
+                }
+                
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+                
+                // تحويل الكانفاس إلى blob
+                const blob = await new Promise(resolve => {
+                    canvas.toBlob(resolve, `image/${selectedFormat}`, quality);
+                });
+                
+                const fileName = uploadedImages[i].name.replace(/\.[^/.]+$/, "") + `.${selectedFormat}`;
+                
+                convertedFiles.push({
+                    blob: blob,
+                    name: fileName
+                });
+            }
+        }
 
         // تحميل الملف
         downloadBtn.addEventListener('click', () => {
-            if (convertedFile) {
-                // في التطبيق الحقيقي، هنا سيتم إنشاء رابط التحميل
-                alert(`سيبدأ تحميل ${convertedFile.name}`);
-                
-                // إعادة تعيين حالة التحميل
-                downloadBtn.disabled = true;
-                convertedFile = null;
+            if (convertedFiles.length === 0) {
+                showNotification('لا توجد ملفات محولة للتحميل!', 'error');
+                return;
             }
+            
+            if (selectedFormat === 'pdf' || convertedFiles.length === 1) {
+                // تحميل ملف واحد
+                const url = URL.createObjectURL(convertedFiles[0].blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = convertedFiles[0].name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } else {
+                // تحميل ملفات متعددة (لصيغ الصور)
+                for (const file of convertedFiles) {
+                    const url = URL.createObjectURL(file.blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = file.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+            }
+            
+            showNotification('بدأ تحميل الملفات!', 'info');
         });
 
         // دالة مساعدة لتنسيق حجم الملف
@@ -677,6 +896,25 @@
             const sizes = ['Bytes', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // دالة لعرض الإشعارات
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
         }
     </script>
 </body>
